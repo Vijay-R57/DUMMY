@@ -55,6 +55,7 @@ async function seed() {
       console.log(`Checking user: ${u.email}...`);
       const res = await client.query('SELECT id FROM auth.users WHERE email = $1', [u.email]);
       
+      let userId;
       if (res.rows.length === 0) {
         console.log(`Inserting user: ${u.email}...`);
         
@@ -72,7 +73,14 @@ async function seed() {
             raw_user_meta_data,
             created_at,
             updated_at,
-            is_super_admin
+            is_super_admin,
+            recovery_token,
+            email_change_token_new,
+            email_change,
+            phone_change,
+            phone_change_token,
+            email_change_token_current,
+            reauthentication_token
           ) VALUES (
             '00000000-0000-0000-0000-000000000000',
             gen_random_uuid(),
@@ -85,21 +93,30 @@ async function seed() {
             $3::jsonb,
             now(),
             now(),
-            false
+            false,
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            ''
           ) RETURNING id;
         `;
         
         const insertRes = await client.query(insertQuery, [u.email, u.password, JSON.stringify(u.metadata)]);
-        const newUserId = insertRes.rows[0].id;
-        console.log(`User ${u.email} seeded with ID: ${newUserId}`);
+        userId = insertRes.rows[0].id;
+        console.log(`User ${u.email} seeded with ID: ${userId}`);
       } else {
-        const userId = res.rows[0].id;
-        console.log(`User ${u.email} already exists with ID: ${userId}. Updating metadata...`);
+        userId = res.rows[0].id;
+        console.log(`User ${u.email} already exists with ID: ${userId}. Updating metadata and resetting password...`);
         await client.query(`
           UPDATE auth.users 
-          SET raw_user_meta_data = $1::jsonb, updated_at = now()
-          WHERE id = $2
-        `, [JSON.stringify(u.metadata), userId]);
+          SET raw_user_meta_data = $1::jsonb,
+              encrypted_password = crypt($2, gen_salt('bf', 10)),
+              updated_at = now()
+          WHERE id = $3
+        `, [JSON.stringify(u.metadata), u.password, userId]);
         
         // Let's also sync standard columns to public.profiles manually if the trigger didn't catch older rows
         await client.query(`
@@ -119,6 +136,52 @@ async function seed() {
           u.metadata.role, 
           u.metadata.employee_code
         ]);
+      }
+
+      // Sync auth.identities
+      const identityData = {
+        sub: userId,
+        email: u.email,
+        role: u.metadata.role,
+        first_name: u.metadata.first_name,
+        last_name: u.metadata.last_name,
+        employee_code: u.metadata.employee_code,
+        email_verified: true,
+        phone_verified: false
+      };
+
+      const identityCheck = await client.query('SELECT id FROM auth.identities WHERE user_id = $1', [userId]);
+      if (identityCheck.rows.length === 0) {
+        console.log(`Inserting identity for user: ${u.email}...`);
+        await client.query(`
+          INSERT INTO auth.identities (
+            id,
+            user_id,
+            identity_data,
+            provider,
+            provider_id,
+            last_sign_in_at,
+            created_at,
+            updated_at
+          ) VALUES (
+            gen_random_uuid(),
+            $1, -- user_id (UUID)
+            $2::jsonb, -- identity_data (JSONB)
+            'email',
+            $3, -- provider_id (TEXT)
+            now(),
+            now(),
+            now()
+          )
+        `, [userId, JSON.stringify(identityData), userId]);
+      } else {
+        console.log(`Updating identity for user: ${u.email}...`);
+        await client.query(`
+          UPDATE auth.identities
+          SET identity_data = $1::jsonb,
+              updated_at = now()
+          WHERE user_id = $2
+        `, [JSON.stringify(identityData), userId]);
       }
     }
     console.log('✅ OPERATIONAL ACCOUNTS SEEDED SUCCESSFULLY!');

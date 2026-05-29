@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { Loader2, LogIn, Eye, EyeOff } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -33,7 +34,20 @@ const Login = () => {
 
       if (fnError) {
         console.error("Authentication Edge Function error:", fnError);
-        setError(fnError.message || "Invalid Employee ID or Password");
+        let errorMsg = "Invalid Employee ID or Password";
+        if (fnError instanceof FunctionsHttpError) {
+          try {
+            const body = await fnError.context.json();
+            if (body && body.error) {
+              errorMsg = body.error;
+            }
+          } catch (_) {
+            // fallback
+          }
+        } else if (fnError.message) {
+          errorMsg = fnError.message;
+        }
+        setError(errorMsg);
         setLoading(false);
         return;
       }

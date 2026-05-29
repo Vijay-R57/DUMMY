@@ -39,37 +39,49 @@ serve(async (req) => {
     const empCode = employeeId.trim().toUpperCase();
 
     // 1. Retrieve the employee profile
+    console.log(`[Login] Searching for profile with employee code: "${empCode}" or email: "${employeeId}"`);
     const { data: initialProfile, error: profileError } = await supabase
       .from("profiles")
       .select("id, email, failed_attempts, locked_until, first_name, last_name, role, office_id")
       .eq("employee_code", empCode)
       .maybeSingle();
 
+    if (profileError) {
+      console.error("[Login] Profile lookup by employee_code failed:", profileError);
+    }
+
     let profile = initialProfile;
 
     if (profileError || !profile) {
-      // Try resolving by email directly as a fallback
-      const { data: profileByEmail } = await supabase
+      console.log("[Login] Not found by code or error occurred. Checking by email...");
+      const { data: profileByEmail, error: emailError } = await supabase
         .from("profiles")
         .select("id, email, failed_attempts, locked_until, first_name, last_name, role, office_id")
         .eq("email", employeeId.trim().toLowerCase())
         .maybeSingle();
       
+      if (emailError) {
+        console.error("[Login] Profile lookup by email failed:", emailError);
+      }
       profile = profileByEmail;
     }
 
     if (!profile) {
+      console.warn("[Login] Profile not found in database for input:", employeeId);
       return new Response(
         JSON.stringify({ error: "Invalid Employee ID or Password" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    console.log(`[Login] Found profile: ID=${profile.id}, Email=${profile.email}`);
+
     // 2. Validate brute-force lockout
     const now = new Date();
     if (profile.locked_until && new Date(profile.locked_until) > now) {
       const waitMs = new Date(profile.locked_until).getTime() - now.getTime();
       const waitMin = Math.ceil(waitMs / 60000);
+      console.warn(`[Login] Profile is locked until ${profile.locked_until}`);
       return new Response(
         JSON.stringify({ error: `Account locked due to multiple failures. Try again in ${waitMin} minute(s).` }),
         { status: 423, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -77,12 +89,14 @@ serve(async (req) => {
     }
 
     // 3. Authenticate user against Supabase Auth
+    console.log(`[Login] Attempting sign in with auth client for email: "${profile.email}"`);
     const { data: authData, error: authError } = await authClient.auth.signInWithPassword({
       email: profile.email,
       password: password
     });
 
     if (authError || !authData.session) {
+      console.warn(`[Login] Auth signInWithPassword failed for ${profile.email}:`, authError?.message);
       console.warn(`Failed login attempt for ${profile.email}: ${authError?.message}`);
       
       const nextAttempts = (profile.failed_attempts ?? 0) + 1;
