@@ -18,7 +18,7 @@ const ScoreBar = ({ label, jp, before, after }: {label: string;jp: string;before
 <div className="space-y-2">
     <div className="flex justify-between items-center">
       
-      <span className="text-sm font-semibold text-primary">+{after - before}%</span>
+      <span className="text-sm font-semibold text-primary">{after - before > 0 ? `+${after - before}%` : after - before < 0 ? `${after - before}%` : `±0%`}</span>
     </div>
     <div className="flex gap-2 items-center">
       <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">

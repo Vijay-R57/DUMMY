@@ -167,8 +167,10 @@ const AnalysisResults = ({ data, beforeImage, afterImage, analysisTimestamp, bef
       doc.setFont("times", "normal");
       doc.text(`${before}%`, 85, y);
       doc.text(`${after}%`, 105, y);
-      doc.setTextColor(37, 99, 71);
-      doc.text(`+${after - before}%`, 125, y);
+      const delta = Math.round(after - before);
+      const deltaStr = delta > 0 ? `+${delta}%` : delta < 0 ? `${delta}%` : `±0%`;
+      doc.setTextColor(delta >= 0 ? 37 : 180, delta >= 0 ? 99 : 30, delta >= 0 ? 71 : 30);
+      doc.text(deltaStr, 125, y);
       y += 5;
 
       // Explanations
@@ -188,7 +190,9 @@ const AnalysisResults = ({ data, beforeImage, afterImage, analysisTimestamp, bef
     doc.setFont("times", "bold");
     doc.setFontSize(11);
     doc.setTextColor(40, 40, 40);
-    doc.text(`Overall Score: ${avgBefore}% → ${avgAfter}% (+${avgAfter - avgBefore}%)`, 15, y);
+    const overallDelta = Math.round(avgAfter - avgBefore);
+    const overallDeltaStr = overallDelta > 0 ? `+${overallDelta}%` : overallDelta < 0 ? `${overallDelta}%` : `±0%`;
+    doc.text(`Overall Score: ${avgBefore}% → ${avgAfter}% (${overallDeltaStr})`, 15, y);
     y += 12;
 
     // Recommendations
