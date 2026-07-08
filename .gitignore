@@ -28,12 +28,17 @@ dist-ssr
 .env.local
 .env.production
 .env.development
-cv-engine/.env
+others/cv-engine/.env
 
-# Python
-cv-engine/__pycache__/
-cv-engine/*.pyc
-cv-engine/venv/
-cv-engine/.venv/
-cv-engine/runs/        
-cv-engine/*.pt
+# Frontend build output
+frontend/dist
+frontend/dist-ssr
+frontend/node_modules
+
+# Python (cv-engine)
+others/cv-engine/__pycache__/
+others/cv-engine/*.pyc
+others/cv-engine/venv/
+others/cv-engine/.venv/
+others/cv-engine/runs/
+others/cv-engine/*.pt
